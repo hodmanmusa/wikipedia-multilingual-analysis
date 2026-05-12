@@ -25,7 +25,7 @@ class WikipediaClient:
                 )
 
                 response.raise_for_status()
-                
+
                 time.sleep(1)
 
                 return response.json()
@@ -42,7 +42,7 @@ class WikipediaClient:
                     time.sleep(2)
 
         return None
-    
+
     def is_relevant_subcategory(self, category_title):
         excluded_keywords = [
             "by country",
@@ -66,7 +66,6 @@ class WikipediaClient:
                 return False
 
         return True
-    
 
     def is_relevant_article(self, article_title):
 
@@ -106,7 +105,7 @@ class WikipediaClient:
                 return False
 
         return True
-    
+
     def get_category_articles(self, category_name, limit=500):
 
         articles = []
@@ -136,9 +135,9 @@ class WikipediaClient:
                 break
 
         return articles
-    
+
     def get_recursive_category_articles(
-            self,
+        self,
         category_name,
         max_depth=2,
         visited_categories=None,
@@ -158,6 +157,7 @@ class WikipediaClient:
 
         if category_counter["count"] >= max_categories:
             return []
+
         category_counter["count"] += 1
 
         print(f"Crawling: {category_name}")
@@ -188,11 +188,9 @@ class WikipediaClient:
 
                 namespace = member.get("ns")
 
-                # ARTICLE
                 if namespace == 0 and self.is_relevant_article(member["title"]):
                     articles.append(member)
 
-                # SUBCATEGORY
                 elif (
                     namespace == 14
                     and max_depth > 0
@@ -214,7 +212,7 @@ class WikipediaClient:
                 break
 
         return articles
-        
+
     def get_articles_metadata(self, page_ids):
 
         page_ids_string = "|".join(
@@ -224,20 +222,104 @@ class WikipediaClient:
 
         params = {
             "action": "query",
-
             "prop": "info|revisions|categories|extlinks",
-
             "inprop": "url",
-
             "rvprop": "timestamp",
-
             "cllimit": "max",
-
             "pageids": page_ids_string,
-
             "format": "json"
         }
 
         data = self.make_request(params)
 
         return data
+
+    def get_article_created_at(self, page_id):
+        """
+        Gets the first revision timestamp of an article.
+        This becomes the article creation date.
+        """
+
+        params = {
+            "action": "query",
+            "prop": "revisions",
+            "pageids": page_id,
+            "rvlimit": 1,
+            "rvdir": "newer",
+            "rvprop": "timestamp",
+            "format": "json"
+        }
+
+        data = self.make_request(params)
+
+        if not data:
+            return None
+
+        pages = data.get("query", {}).get("pages", {})
+
+        page_data = pages.get(str(page_id))
+
+        if not page_data:
+            return None
+
+        revisions = page_data.get("revisions", [])
+
+        if not revisions:
+            return None
+
+        return revisions[0].get("timestamp")
+
+    def get_article_edit_count(self, page_id):
+        """
+        Counts total revisions using pagination.
+        This is lighter than collecting full revision content.
+        """
+
+        edit_count = 0
+
+        params = {
+            "action": "query",
+            "prop": "revisions",
+            "pageids": page_id,
+            "rvlimit": "max",
+            "rvprop": "ids",
+            "format": "json"
+        }
+
+        while True:
+
+            data = self.make_request(params)
+
+            if not data:
+                break
+
+            pages = data.get("query", {}).get("pages", {})
+            page_data = pages.get(str(page_id), {})
+            revisions = page_data.get("revisions", [])
+
+            edit_count += len(revisions)
+
+            if "continue" in data:
+                params.update(data["continue"])
+            else:
+                break
+
+        return edit_count
+
+    def get_article_revision_stats(self, page_id):
+        """
+        Returns revision-based statistics.
+
+        contributor_count is intentionally left as None for now because
+        accurate contributor counting requires collecting all unique users
+        across revision history, which is expensive for large articles.
+        """
+
+        created_at = self.get_article_created_at(page_id)
+        edit_count = self.get_article_edit_count(page_id)
+
+        return {
+            "created_at": created_at,
+            "edit_count": edit_count,
+            "contributor_count": None
+        }

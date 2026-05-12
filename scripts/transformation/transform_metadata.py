@@ -46,6 +46,7 @@ client = WikipediaClient(LANGUAGE_CODE)
 page_ids = [
     article["pageid"]
     for article in raw_articles
+    if article.get("pageid")
 ]
 
 BATCH_SIZE = 50
@@ -64,6 +65,7 @@ for i in range(0, len(page_ids), BATCH_SIZE):
     pages = data.get("query", {}).get("pages", {})
 
     for page_id, page_data in pages.items():
+
         categories = page_data.get("categories", [])
         external_links = page_data.get("extlinks", [])
         revisions = page_data.get("revisions", [])
@@ -73,21 +75,30 @@ for i in range(0, len(page_ids), BATCH_SIZE):
         if revisions:
             last_revision_timestamp = revisions[0].get("timestamp")
 
+        category_titles = [
+            category.get("title")
+            for category in categories
+            if category.get("title")
+        ]
+
+        revision_stats = client.get_article_revision_stats(
+            page_data.get("pageid")
+        )
+
         article_record = {
             "wikipedia_page_id": page_data.get("pageid"),
             "language_code": LANGUAGE_CODE,
             "title": page_data.get("title"),
-            "article_length": page_data.get("length"),
-            "category_count": len(categories),
-            "reference_count": len(external_links),
+            "created_at": revision_stats.get("created_at"),
             "last_updated_at": last_revision_timestamp,
+            "article_length": page_data.get("length"),
+            "edit_count": revision_stats.get("edit_count"),
+            "contributor_count": revision_stats.get("contributor_count"),
+            "reference_count": len(external_links),
+            "category_count": len(category_titles),
             "article_url": page_data.get("fullurl"),
             "raw_json_path": RAW_JSON_PATH,
-            "categories": [
-                category.get("title")
-                for category in categories
-                if category.get("title")
-            ]
+            "categories": category_titles
         }
 
         processed_articles.append(article_record)

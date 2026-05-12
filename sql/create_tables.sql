@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS articles (
     article_url TEXT,
 
     raw_json_path TEXT,
+    total_view_count BIGINT,
 
     UNIQUE(wikipedia_page_id, language_code)
 );
@@ -57,3 +58,17 @@ VALUES
 ('fa', 'Persian'),
 ('ps', 'Pashto')
 ON CONFLICT (code) DO NOTHING;
+
+
+
+ALTER TABLE articles
+ADD CONSTRAINT unique_article_language
+UNIQUE (wikipedia_page_id, language_code);
+
+ALTER TABLE categories
+ADD CONSTRAINT unique_category_language
+UNIQUE (source_category_name, language_code);
+
+ALTER TABLE article_categories
+ADD CONSTRAINT unique_article_category
+UNIQUE (article_id, category_id);
